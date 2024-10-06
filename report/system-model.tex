@@ -1,0 +1,119 @@
+\chapter{System Model \& Requirements}\label{ch:sample-chapter}
+This section outlines the key components of the system model and the associated requirements. The model is based on several critical assumptions and trust relationships, as detailed below.
+
+\section{System Model}
+Figure \ref{fig:communication-flow} illustrates an overview of the system model. The model consists of four distinct actors:
+\begin{itemize}
+    \item \textbf{Client:} The entity that wishes to visit a website via the web proxy hosted within the enclave.
+    \item \textbf{Enclave:} A piece of code operating within an isolated execution environment, provided by Trusted Execution Environment (TEE) technology.    
+    \item \textbf{Host:} The hardware and software infrastructure on which the Enclave is executed.
+    \item \textbf{Backend:} The server that hosts the website the Client aims to access.
+\end{itemize}
+
+\begin{figure}[h!]
+    \centering
+    \begin{tikzpicture}[
+        node distance=3cm,
+        mynode/.style={draw, align=center, minimum height=4cm, minimum width=1cm},
+        host/.style={draw, align=center, minimum height=4cm, minimum width=3cm},
+        enclave/.style={draw, rectangle, minimum height=2cm, minimum width=1.5cm, fill=gray!20},
+        arrow/.style={-Stealth, thick},
+        adversary/.style={shape=diamond, draw=red, fill=red!30, minimum size=0.8cm, inner sep=0pt, label=above:{Adversary}}
+    ]
+
+    % Nodes
+    \node [mynode] (client) {};
+    \node [host](server) [right=of client] {};
+    \node [mynode](backend) [right=of server] {};
+    \node [mynode] (enclave) [enclave, above=1cm of server.south] {Enclave};
+
+    % Labels
+    \node at ([yshift=-0.2cm]client.south) {Client};
+    \node at ([yshift=-0.2cm]server.south) {Host};
+    \node at ([yshift=-0.2cm]backend.south) {Backend};
+
+    % Arrows
+    \draw[arrow] ([yshift=0.5cm]client.east) -- ([yshift=0.5cm]enclave.west) node[midway, above] {GET};
+    \draw[arrow] ([yshift=-0.5cm]enclave.west) -- ([yshift=-0.5cm]client.east) node[midway, below] {OK 200};
+
+    \draw[arrow] ([yshift=0.25cm]enclave.east) -- ([yshift=0.25cm]backend.west) node[midway, above] {GET};
+    \draw[arrow] ([yshift=-0.25cm]backend.west) -- ([yshift=-0.25cm]enclave.east) node[midway, below] {OK 200};
+
+    \end{tikzpicture}
+    \caption{Example of communication flow between the Client, Enclave, and Backend server.}
+    \label{fig:communication-flow}
+\end{figure}
+
+
+\section{Threat Model} \label{sec:threat-model}
+
+As represented in Figure \ref{fig:threath-model}, the system adopts the Dolev-Yao model to describe the network adversary. In this model, the adversary not only monitors network traffic but also actively interferes with and tampers with messages. This capability includes intercepting, altering, and injecting messages into the network, which poses significant risks to data integrity and confidentiality. Additionally, it is assumed that the web proxy service operator is malicious, potentially exploiting their position to compromise the security of the hosted services or data. 
+
+Additionally, it is assumed that it is not in the interest of a malicious host or network adversary to just prevent any communication between client, enclave and backend, i.e. the host could simply drop all the packets from/to the enclave.
+
+\begin{figure}[h!]
+    \centering
+    \definecolor{redblock}{rgb}{1, 0.4, 0.4}
+    \begin{tikzpicture}[
+        node distance=3cm,
+        mynode/.style={draw, align=center, minimum height=4cm, minimum width=1cm},
+        host/.style={draw, align=center, minimum height=4cm, minimum width=3cm},
+        enclave/.style={draw, rectangle, minimum height=2cm, minimum width=1.5cm, fill=gray!20},
+        arrow/.style={-Stealth, thick},
+        adversary/.style={shape=diamond, draw=black, fill=redblock, minimum size=0.8cm, inner sep=0pt, label=above:{Adversary}}
+    ]
+
+    % Nodes
+    \node [mynode] (client) {};
+    \node [host, fill=redblock](server) [right=of client] {};
+    \node [mynode](backend) [right=of server] {};
+    \node [mynode] (enclave) [enclave, above=1cm of server.south] {Enclave};
+
+    % Labels
+    \node at ([yshift=-0.2cm]client.south) {Client};
+    \node at ([yshift=-0.2cm]server.south) {Host};
+    \node at ([yshift=-0.2cm]backend.south) {Backend};
+    
+    % Adversary symbols (diamond shape)
+    \node [adversary, yshift=2cm]  (adv1) at ($(client.east)!0.5!(server.west)$) {};
+    \node [adversary, yshift=2cm] (adv2) at ($(server.east)!0.5!(backend.west)$) {};
+
+    % Arrows
+    \draw[arrow] ([yshift=0.5cm]client.east) -- ([yshift=0.5cm]enclave.west) node[midway, above] {GET};
+    \draw[arrow] ([yshift=-0.5cm]enclave.west) -- ([yshift=-0.5cm]client.east) node[midway, below] {OK 200};
+
+    \draw[arrow] ([yshift=0.25cm]enclave.east) -- ([yshift=0.25cm]backend.west) node[midway, above] {GET};
+    \draw[arrow] ([yshift=-0.25cm]backend.west) -- ([yshift=-0.25cm]enclave.east) node[midway, below] {OK 200};
+
+    \end{tikzpicture}
+    \caption{Threat model.}
+    \label{fig:threath-model}
+\end{figure}
+
+\section{Assumptions} \label{sec:assumptions}
+\subsection{Trust Assumptions}
+
+It is assumed that TEE technologies are secure and reliable, and mechanisms are provided for clients to verify remote TEE parties integrity. This level of trust is fundamental to the model and affects the security assurances that can be provided.
+
+It is important to report that TEE technologies in reality are not perfect and present vulnerabilities. In the specific case of Intel SGX many vulnerabilities have been found as reported in this survey \cite{nilsson2020surveypublishedattacksintel}. It is not in the scope of this project to protect against these vulnerabilities.
+
+Public Key Infrastructure (PKI) \cite{rfc5280} is also trusted for authentication during TLS handshakes.
+
+\subsection{Client and Website Assumptions}
+
+In this report, it is assumed that both the clients and the website's backends are not malicious. We do not protect the clients from websites served by backends that are vulnerable to XSS/CORS attacks. However, we must carefully design the proposed system so that it does not introduce additional XSS/CORS attacks.
+
+\section{Requirements}
+\subsection{Functional Requirements}
+The goal is to develop an enclave that hosts a web proxy service. This service will function like a typical website, accessible through any browser or client. Users will be able to connect to and browse any website via this service. 
+
+Specifically, a client sends a request to the enclave, specifying the resource of a website they wish to access. The enclave performs this request on behalf of the client contacting the specified website, including all headers, parameters, and body sent with the original request. The enclave then responds to the client with the requested resources, applying URL rewriting to ensure smooth navigation through the website always via the web proxy. Via URL rewriting all the URLs will now point to the web proxy instead of the external websites.
+
+An example of the communication flow is illustrated in Figure \ref{fig:communication-flow}.
+
+For instance, if the web proxy service is available at \texttt{proxy.com}, a user accessing \texttt{proxy.com} via their browser should be able to visit and interact with \texttt{ethz.ch} while remaining connected to \texttt{proxy.com}. In other words, even though the user is browsing \texttt{ethz.ch}, the browser should indicate that the connection is still to \texttt{proxy.com}.
+
+\subsection{Security Requirements}
+The security requirements of the model aim to ensure client privacy, meaning it should not be possible to determine which website the client is accessing through the web proxy service. Additionally, the communication between the client and the enclave, as well as between the enclave and the server, must satisfy the following properties: confidentiality and integrity. Furthermore, it is necessary for the client to authenticate the enclave and verify its identity, while the enclave must be able to authenticate the backend server.
+
+Furthermore, all communication between the client and the target website, including any resources linked by the target website, must be routed through the enclave. For instance, on the line of the previous example, the user's browser should never communicate directly with \texttt{ethz.ch}. Failing to meet this requirement could compromise client privacy, as direct access to the target website would bypass the enclave.

@@ -1,0 +1,88 @@
+\chapter{Design}\label{ch:sample-chapter}
+The design of a secure web web proxy service was influenced by the need for a highly secure, yet flexible solution that is not tied to a specific platform. Instead of structuring the design around existing open-source proxies or web servers, the decision was made to design the web proxy service from scratch, allowing for complete control over security and performance. This section outlines the key design decisions.
+
+\section{Enclave Design Decisions}
+\subsection{Stream-based Data Forwarding} \label{stream-based-design}
+
+Considering that the enclave has very limited memory, the design of the proposed web proxy service was made stateless. 
+
+This means the service acts as a simple relay, just passing along packets without keeping track of who sent them or storing any data. This approach makes it easier to scale the service to handle more users.
+
+Moreover, when a client makes a request, the service doesn’t wait to download the entire content from the backend before sending it to the client. Instead, it uses a streaming approach, where it downloads small chunks of data, for instance 4096 bytes at a time, and immediately sends them to the client. This way, the service uses much less memory.
+
+\subsection{Fetching Resources via Enclave}
+The structure of the path for a request to the web proxy service to fetch a remote resource is as follows:
+
+\begin{quote}
+\texttt{<enclave\_domain>?url=<backend\_url>}
+\end{quote}
+
+In this structure:
+\begin{itemize}
+    \item \texttt{<enclave\_domain>} is the domain of the web proxy service within the enclave.
+    \item \texttt{<backend\_url>} is the full URL of the resource the client wants to fetch from a backend, specified in the \texttt{url} query parameter.
+\end{itemize}
+
+The \texttt{<backend\_url>} provided in the query parameter is used by the enclave to perform the actual request to a backend web server on behalf of the client. The request will also use the same HTTP method, headers, and body as the original request made to the service.
+
+
+\subsection{URL rewriting} \label{sec:url-rewriting}
+The content downloaded from the backend, whether it's HTML, CSS, or other types, will usually contain links to additional resources. If these links are not rewritten, the user's browser will directly connect to those resources when fetching them or when the user clicks on a link. A direct connection between the user's browser and the backend server will be visible to a network observer and will potentially leak information regarding the website the user is navigating to.
+
+To ensure that all resources are accessed through the enclave, URLs are rewritten according to the following rule:
+
+\texttt{<modified\_original\_domain>.<enclave\_domain>:<port>/?url=<original\_url>}
+
+In this rule:
+\begin{itemize}
+    \item \texttt{<modified\_original\_domain>} corresponds to the original domain with all dots replaced by hyphens. For instance \texttt{sub.example.com} becomes \texttt{sub-example-com}. 
+    \item \texttt{<enclave\_domain>} is the domain of the web proxy service running in the enclave.
+    \item \texttt{<port>} is the port number used by the service (if needed).
+    \item \texttt{<original\_url>} is the complete URL of the resource that needs to be fetched.
+\end{itemize}
+
+The original domain is prepended to the enclave domain in order to allow user's browser to enforce SOP (Same Origin Policy) across the different resources.
+
+\subsection{Connection between Client, Enclave and Backend Server}
+To protect the data exchanged over the network from any adversary and to secure all data going to and from the enclave, including from the host operating system, TLS (Transport Layer Security) is used. TLS ensures the confidentiality, integrity, and authenticity of the data.
+
+When clients use the enclave service, they establish a TLS tunnel directly between themselves and the enclave. Similarly, when the enclave establishes a connection with a backend, it also uses TLS, if supported by the backend server.
+
+Clients of the web proxy service will need to verify the enclave certificate using the mechanism described in Section \ref{sec:ra-over-tls}. Their root of trust will then be the TEE manufacturer, based on the TEE technology that was chosen.
+
+\subsection{One thread per request}
+To simplify the design, the current approach creates a new thread for each HTTPS request made by the client. Each thread handles the request by contacting the backend, processing it, and then terminating.
+
+However, this design has a drawback: it initiates a new TLS handshake for every request. An improved approach would involve maintaining a persistent TLS connection throughout the duration of multiple requests. While this would reduce the overhead of repeated handshakes, it introduces additional complexity, such as managing and preserving TLS sessions and determining when a TLS connection can be safely closed.
+
+\subsection{Remote Attestation during with TLS Handshake} \label{sec:ra-over-tls}
+In a typical Trusted Execution Environment (TEE) setup, Remote Attestation (RA) is explicitly performed by the client. When a client connects to an enclave, it initiates a protocol to conduct the RA.
+The challenge, in the context of this project, is that the client would first need to perform RA, receive a secret during the RA process, and then use that secret to establish secure communication with the enclave. While these steps are technically feasible, they would require the development of a specialized client. Moreover, all potential users of this service would need to download and use this special client, which would create significant overhead.
+
+The goal is to make the user experience as seamless as possible, resembling normal navigation on a target website without requiring the use of a specialized client for the web proxy service.
+
+To achieve this, in our design we use the solution proposed in this paper \cite{sgx-ra-tls-white-paper} which integrates RA with the standard TLS handshake, offering an ideal solution. The concept of RA-TLS allows the enclave to use a self-signed certificate during the TLS handshake. This self-signed certificate is signed with a key pair that can be verified with the RA report included in the certificate. The RA report can be verified with the TEE provider's Root CA, and it also contains the identity of the enclave. Thus, a client just needs to trust the TEE provider's  Root CA and can then verify locally the whole chain of trust and at the same time validate the identity of the enclave and the TLS handshake.
+
+Practically speaking, a user can connect to the web proxy website hosted on the enclave just like they would with any other website. The client can manually check the certificate and RA report or use a tool like a browser extension for verification.
+
+\subsection{SNI encryption} \label{sec:sni-encryption}
+Due to the way URL rewriting is performed, the original website domain is fully included in the domain sent by the clients during TLS handshake.
+
+In order to avoid leaking this information to a potential observer, Encrypted SNI (ESNI)\cite{esni} is leveraged. A public key is associated to the DNS record of the web proxy service. The client can then use the public key to encrypt its SNI record in such a way that only the enclave can decrypt it.
+
+SNI encryption is also used during the TLS handshake with the backend when supported.
+
+It is important to report that there exists also an alternative technology to solve the same problem: Encrypted Client Hello (ECH)\cite{ech}.
+
+\subsection{Wildcard certificate and DNS records}
+Thanks to the way URL rewriting is performed, potentially infinite subdomains can be used. To minimize the need for numerous certificates and DNS records, the following strategies are incorporated into the design.
+
+For certificates, a wildcard certificate for \texttt{*.<enclave\_domain>} is issued, matching all the first level subdomains, as specified in \cite{rfc9525}.
+
+For DNS, a wildcard DNS is employed, enabling a single entry to match all possible subdomains.
+
+\subsection{DNS and Privacy Considerations}
+A critical aspect to consider is the handling of DNS queries by the enclave, which are necessary for resolving the IP address of the server and retrieving the public key associated with the domain for Server Name Indication (SNI) encryption. Therefore, DNS queries must ensure confidentiality, integrity, and authentication of the endpoint being contacted.
+
+This problem is well-documented, with established solutions such as DNS over TLS (DoT) \cite{rfc7858} or DNS over HTTPS (DoH) \cite{rfc8484} and a solution based on TEEs such as Private DNS-over-TLS (PDoT) \cite{Nakatsuka_2019} available. Determining the most suitable solution for this project is beyond its current scope.
+

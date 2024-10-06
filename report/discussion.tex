@@ -1,0 +1,58 @@
+\chapter{Discussion}\label{ch:sample-chapter}
+\section{Design Limitations and Considerations}
+
+\subsection{Balancing performance and security for URL rewriting} \label{sec:url-rewriting-limitations}
+URL rewriting ensures that when a client clicks a link within received web content, they continue navigating through the website via the web proxy and that the browser keeps loading resources via the web proxy. For purely HTML-based websites, it is feasible to rewrite all URLs to point to the enclave instead of the target site. However, modern websites often deliver content in various formats, such as JSON. To maintain consistent proxy navigation, the URL rewriting algorithm must be applied to all data passing through the enclave. Otherwise, some URLs might not be rewritten, leading the browser to load resources directly from the website's server, or allowing a user to click a link and navigate to the website without passing through the enclave.
+
+This poses challenges because, unlike HTML, where URLs are clearly defined (e.g., in \texttt{<a>} tags with \texttt{href} attributes), identifying and rewriting URLs within JSON or other formats is complex and may result in a slower and more intricate algorithm. Additionally, handling dynamically generated URLs via JavaScript is particularly challenging. Since these URLs cannot be captured through static analysis, the enclave would need to execute the JavaScript locally and return the generated content statically. However, this approach is infeasible due to potential performance degradation and security risks, as it involves executing potentially malicious code within the enclave.
+
+The most practical solution is to disable JavaScript or any mechanisms that allow dynamic URL creation, although this could significantly affect user experience.
+
+Other web proxies address the challenge of balancing performance and security in various ways: some choose not to serve JavaScript files, while others employ faster URL algorithms that may not capture all URLs on the page.
+
+\subsection{IP Leak, Anonymity Set, and Correlation Attacks} \label{sec:IP-leak}
+While the IP addresses of the client and of the enclave do not directly reveal the websites being visited, the IP address of the backend server could potentially disclose the exact website or narrow it down to a small set of possibilities. This is because an IP address, in simplified terms, is associated with a server that may host one or more websites, and this information might be known to an attacker. For example, a popular website might be hosted on a server with a specific IP, making the accessed domain easily identifiable.
+
+In such scenarios, maintaining client anonymity requires a large anonymity set (i.e., many clients using the service simultaneously), so it is not immediately obvious which client is accessing which server. However, even with a large anonymity set, privacy may not be fully guaranteed due to potential side-channel correlation attacks. An attacker monitoring both the connection between the client and the enclave and the connection between the enclave and the backend could match the request patterns on both sides, revealing the accessed website.
+
+A possible mitigation is to introduce noise in the communication between the client and the enclave, as well as between the enclave and the backend.  This noise could involve random delays, dummy requests, or padding added to the data being transmitted, making it more difficult for an attacker to infer sensitive information based on timing or traffic patterns. However, this approach might not be effective against statistical side-channel attacks that analyze multiple traces over time.
+
+While it is unlikely that an attacker would possess all the necessary knowledge about IP-to-domain mappings and the ability to monitor both network segments, the risk cannot be completely dismissed.
+
+\subsection{Handling Non-SNI-Compliant Backends}
+As discussed in Section \ref{sec:sni-encryption}, Encrypted Server Name Indication (ESNI) is leveraged to ensure the anonymity of the accessed website from attackers monitoring the connection between the client and the enclave. Although ESNI adoption is increasing, as of 2022, less than 20\% of websites use it \cite{SNI-adoption}. When ESNI is not supported, a network observer could identify the website being accessed by the enclave, making it easier to link the client to the website and compromising privacy.
+
+\subsection{Fingerprinting Attacks} \label{sec:fingerprinting-attacks}
+Section \ref{sec:IP-leak} describes a class of side-channel attacks where an attacker tries to match client requests with enclave requests to identify the accessed website. Another type of attacks involves website fingerprinting, where the sizes and patterns of requests are used to identify the website being accessed by a client.
+
+To defend against such attacks, noise could be injected into the communication, such as extra packets or varying packet sizes. However, even with noise, statistical side-channel attacks could still succeed if sufficient data is collected.
+
+A more robust solution would be to design a new protocol between the client and the enclave specifically to prevent these attacks. However, this is not be practical and will require custom clients making the proposed solution not accessible to most users.
+
+\subsection{One New Thread Per Request} 
+Each HTTP request from a client spawns a single thread, initiating a new TLS handshake. This introduces significant overhead. An improvement could involve maintaining an open session and reusing the established TLS session, though determining when to close the TLS connection and terminate the thread would be challenging.
+
+\section{Implementation Limitations}
+The following limitations of the current implementation, not covered in Section \ref{sec:differences-with-design}, are reported:
+\begin{itemize}
+    \item \textbf{Support for TLS-enabled Backends Only:} The current implementation only supports HTTPS backends, as the HTTP protocol is implemented on top of the TLS connection and cannot function independently over TCP.
+    \item \textbf{Limited URL rewriting capabilities:} As explained in Section \ref{sec:url-rewriting-limitations}, it is very challenging to perform URL rewriting such that it captures all URLs present in a website. The algorithm currently implemented relies on tags to spot URLs, thus it cannot rewrite URLs in unstructured data and URLs dynamically generated.
+    \item \textbf{No Support for Transfer-Encoding:} The web proxy does not support any HTTP Transfer-Encoding \cite{http-transfer-encoding}, resulting in an inability to load websites that rely on it, such as \texttt{google.com}.
+    \item \textbf{TLS Version:} Only TLS 1.2 is supported by the proxy.
+\end{itemize}
+
+\section{Attack on SOP}
+The current design of rewritten URLs effectively allows browsers to enforce SOP. However, cross-site scripting (XSS) or cross-site request forgery (CSRF) attacks could still be possible under specific conditions where it is possible to circumvent SOP.
+
+As discussed in Section \ref{sec:url-rewriting}, a URL like \texttt{sub-to.example.com} is rewritten as \texttt{sub-to-example-com.<enclave\_domain>}. However, a different website, such as \texttt{sub.to-example.com}, would be rewritten to the same subdomain. An attacker could exploit this by crafting a malicious domain B that, when rewritten, corresponds to the same domain as target domain A, enabling XSS or CSRF attacks.
+
+This attack requires that the target domain includes a hyphen in its name. A condition that is difficult to meet, as many domains do not have hyphens. Additionally, the malicious domain must be available for purchase.
+
+An effective method to completely prevent such attacks is to use dots instead of hyphens when generating subdomains. For example, \texttt{sub-to.example.com} would be rewritten as \texttt{sub-to.example.com.<enclave\_domain>}. 
+
+This approach, however, introduces significant challenges in certificate management when wildcard certificates are used. Wildcard certificates are valid only for single-level subdomains, meaning a certificate like \\ \texttt{*.<enclave\_domain>} would not cover deeper subdomains created through this method. Obtaining custom certificates for every possible website a customer might access is impractical and inefficient.
+
+A feasible solution is to utilize certificates without a specified Common Name (\texttt{CN}), allowing them to be considered valid for any domain and subdomain. This would simplify certificate management and ensure secure connections across all dynamically generated subdomains.
+
+Another approach could involve the replacement of the dots with different fixed strings relatively to the dot position. 
+

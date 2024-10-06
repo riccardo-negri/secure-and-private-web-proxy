@@ -1,0 +1,46 @@
+\chapter{Related Work}\label{ch:sample-chapter}
+Various approaches have been developed in the field of internet privacy and security to protect user anonymity and secure online activities. This section reviews the related work on proxies, VPNs, Tor, and web proxy services, highlighting how the proposed approach differs from existing solutions and addresses the challenges identified in existing research.
+
+\section{Alternative Solutions}
+\subsection{Proxies}
+Traditional proxy servers act as intermediaries between users and destination servers, forwarding requests and responses while hiding the user's IP address from the destination server. However, traffic between the client and the proxy lacks inherent security guarantees provided by the proxy itself; security is instead ensured by the protocol used between the client and the backend server. Proxies must be manually configured at the OS or browser level, and because they handle all traffic, a malicious proxy can see both the source and destination of the packets, gaining full knowledge of this information.
+
+Web proxies differ in the sense that they are typically accessed via a web interface, requiring no manual configuration at the system level. Instead of managing all network traffic, web proxies handle only web traffic \\(HTTP/HTTPS), allowing users to access specific websites by entering the desired URL into the proxy's web interface. Unlike traditional proxies, which can obscure the user's IP address but expose the full range of their online activity, a web proxy's scope is limited to the websites users visit through the proxy service itself. The web proxies are more accessible but introduce risks, as users rely entirely on the proxy provider to securely handle their web traffic. The proxy service could potentially inspect, modify, or log the user’s web activity, leading to privacy concerns, especially when sensitive data is involved.
+
+\subsection{Virtual Private Networks (VPNs)}
+VPN technology establishes an encrypted tunnel between the user and the VPN server, through which all client-server communication is routed before exiting to the internet via the VPN server. While this method enhances privacy, it shares certain limitations with proxies: the VPN server has complete visibility into the traffic. Consequently, the server must be trusted; however, there is no assurance that it is trustworthy or that it refrains from collecting user data, as discussed in \cite{285411} and \cite{10.1145/3278532.3278570}.
+
+Additionally, setting up a VPN requires extra software and technical expertise, making it less accessible to non-experts. On a typical laptop, setting up a VPN may involve downloading and installing new software or browser extensions. For non-tech-savvy users, this process may be challenging. More importantly, in environments with restricted privileges (i.e. public library computers) users may be unable to install necessary software or browser extensions thus they would not be able to use VPN at all.
+
+Finally, VPNs can be blocked through techniques such as VPN fingerprinting \cite{280012} or IP blacklisting of known VPN servers.
+
+\subsection{Tor}
+The Tor network \cite{tor} is a decentralized system designed to anonymize users' internet activities by routing traffic through multiple volunteer-operated nodes. Each node only knows the preceding and following nodes, ensuring that no single entity can trace the entire path. Although Tor provides strong anonymity, its multi-hop design results in performance degradation. Moreover, Tor requires the use of a dedicated browser, which may not be easily accessible to inexperienced users. 
+
+\subsection{Comparison with Proposed Solution}
+The solution proposed in this project addresses the limitations identified above by offering a web-based proxy that is easily accessible via any browser without the need to install any extra software. Additionally, it provides a mechanism to verify the trustworthiness of the proxy through Remote Attestation (RA) and ensures that all communication between the client, enclave, and backend servers is encrypted via TLS. One issue this solution does not mitigate is correlation attacks, where an attacker observing both sides of the network could correlate client and enclave requests as discussed in Section \ref{sec:IP-leak}. Such attacks are partially \cite{evers2016thirteen} prevented by Tor thanks to the use of multiple relays.
+
+\section{Web Proxy Services}
+\subsection{Existing solutions}
+There are numerous web proxy services available worldwide. According to \cite{similar-web}, some of the most widely used include:
+\begin{itemize}
+    \item \texttt{proxysite.com} \cite{proxy-site}
+    \item \texttt{hide.me} \cite{hideme}
+    \item \texttt{freeproxy.io} \cite{freeproxy}
+    \item \texttt{genmirror.com} \cite{genmirror}
+\end{itemize}
+
+These proxies, however, present significant security issues as detailed in \cite{watanabe2020melting}. A primary concern is that all rehosted websites share the same origin (full domain), leading to most of the following vulnerabilities:
+\begin{itemize}
+    \item \textbf{Persistent MITM:} Web proxies act as full Man-In-The-Middle (MITM) entities since they can see all traffic between the client and backend servers unencrypted. They have the capability to manipulate, drop, or craft messages.
+    \item \textbf{Session Hijacking and Injection:} Since all visited websites from the enclave share the same origin, an attacker can easily steal cookies from another website, facilitating session hijacking or injecting new cookies to force a victim to log into a specific account when visiting a target website.
+    \item \textbf{Privilege Abuse:} Web pages sometimes request access to computer resources like cameras or microphones, which are associated with the origin. These permissions are then shared with all re-hosted websites and can be exploited by rogue websites.
+    \item \textbf{Credential Theft:} Browser-stored credentials are associated with the origin, and in some cases, are autofilled in forms. A rogue website could steal credentials for other websites.
+    \item \textbf{History Theft:} Many modern websites use cookies and local storage in the browser to store data. An attacker could monitor cookies and local storage with malicious scripts to determine which websites are visited via the web proxy. The feasibility of this technique for website fingerprinting is demonstrated in \cite{watanabe2020melting}.
+    \item \textbf{Partial URL Rewriting:} It was observed that certain web proxies, such as \texttt{proxysite.com}, do not consistently rewrite all URLs in the resources they download. This results in the browser directly accessing remote resources without going through the proxy.
+\end{itemize}
+
+On the user experience side, during the course of this project, I observed inconsistent behavior by some proxies. For example, websites like \texttt{google.com} occasionally failed to load correctly.
+
+\subsection{Comparison with Proposed Solution}
+The proposed design addresses all the issues mentioned above. Regarding the MITM issue, RA allows the client to verify that the enclave is trustworthy and will behave as expected. The other vulnerabilities are mitigated by ensuring that all websites accessed via the web proxy correspond to different subdomains, thus preventing them from sharing the same origin. This effectively neutralizes the security concerns associated with existing web proxy solutions.

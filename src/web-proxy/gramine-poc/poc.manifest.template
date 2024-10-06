@@ -1,0 +1,27 @@
+# Copyright (C) 2023 Gramine contributors
+# SPDX-License-Identifier: BSD-3-Clause
+
+loader.entrypoint = "file:{{ gramine.libos }}"
+libos.entrypoint = "/poc"
+loader.log_level = "{{ log_level }}"
+
+loader.env.LD_LIBRARY_PATH = "/lib"
+
+fs.mounts = [
+  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/poc", uri = "file:poc" },
+  { path = "/lib/", uri = "file:/usr/lib/x86_64-linux-gnu/" },
+  { path = "/etc/resolv.conf", uri = "file:/etc/resolv.conf" },
+  { path = "/etc/ssl/certs", uri = "file:/etc/ssl/certs" },
+]
+
+sgx.debug = true
+sgx.enclave_size = "1024M"
+sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
+
+#sgx.trusted_files = [
+#  "file:{{ gramine.libos }}",
+#  "file:poc",
+#  "file:{{ gramine.runtimedir() }}/",
+#  "file:/etc/resolv.conf",
+#]

@@ -1,0 +1,13 @@
+\chapter{Conclusion \& Future Work}\label{ch:sample-chapter}
+\section{Conclusion}
+This project has examined the design and implementation of a web-based proxy solution that addresses significant security and privacy challenges inherent in existing web proxies. The proposed service offers enhanced accessibility compared to VPNs and Tor-based solutions, while leveraging Trusted Execution Environments (TEEs) and Remote Attestation (RA) to ensure encrypted communication and authentication between the client, enclave, and backend servers. By employing RA and assigning different origins to different websites, the system effectively mitigates vulnerabilities commonly found in traditional web proxies, such as MITM attacks, session hijacking, privilege abuse, and credential theft. However, the solution still has limitations, particularly in defending against correlation attacks and traffic fingerprinting.
+
+\section{Future Work}
+While the proposed solution offers significant improvements over existing technologies, there are several areas for future research and development:
+\begin{itemize}
+    \item \textbf{Mitigation of Correlation and Fingerprinting Attacks:} Future research should focus on developing strategies to defend against correlation and fingerprinting attacks, potentially by integrating techniques from the Tor technology or exploring new cryptographic methods.
+    \item \textbf{Performance Optimization:} The current implementation could benefit from optimizations to reduce overhead, particularly in high-traffic scenarios or when handling multiple concurrent connections.
+    \item \textbf{Enhancing User Experience:} Improving the user interface and incorporating a seamless method for performing RA over TLS within browsers would make the system more user-friendly, promoting broader adoption.
+\end{itemize}
+
+In conclusion, this project has made significant progress in improving web proxy security, but ongoing research and development are essential to address remaining challenges and expand the system's capabilities and adoption.

@@ -1,0 +1,300 @@
+\chapter{Evaluation}\label{ch:sample-chapter}
+\section{Security Analysis}
+The following security analysis considers the two adversaries defined in Section \ref{sec:threat-model} and evaluates how the system design protects against these actors: a malicious host and a network adversary that intercepts communication between the client and the enclave, as well as between the enclave and the backend server.
+
+\subsection{Malicious Host}
+A malicious host controls the machine and operating system on which the enclave is running. Consequently, this adversary has full control over the data entering and exiting the enclave. Based on the trust model, the host may attempt the following actions:
+\begin{itemize}
+    \item tamper with messages
+    \item impersonate the enclave
+    \item impersonate a backend web server
+    \item leak which website the client is connecting to
+\end{itemize}
+
+
+Regarding the first issue, the host is unable to tamper with messages because all communication to and from the enclave is conducted over TLS. TLS provides strong guarantees of confidentiality and integrity, ensuring that the host cannot successfully alter the messages and read their contents. Additionally, the use of TEE technology guarantees confidentiality and integrity of all the data inside the enclave. 
+
+Typically, during a TLS handshake, the domain that the client expects to connect to is included in the first TLS message in plaintext. This could allow an adversary to determine which websites are being accessed, although they would not be able to view the actual data exchanged because of TLS confidentiality property. Our design mitigates this issue by supporting SNI encryption on the client side and utilizing SNI encryption when communicating with backend servers that support it.
+
+For the second issue, the host cannot impersonate the enclave due to the remote attestation process performed over TLS. The host cannot produce a valid TLS certificate that includes a report signed by the remote attestation trusted authority (i.e., Intel) with the same identity (i.e., \texttt{MRENCLAVE}) as the genuine enclave. While a malicious host could create a rogue enclave capable of obtaining a certificate signed by trusted authority, the enclave identity included in the report would not match that of the trusted enclave because of the remote attestation protocol. Therefore, a client that verifies the enclave identity will not be deceived.
+
+Regarding the third issue, we rely on authentication via TLS, using certificates verified through the PKI infrastructure. The enclave has hardcoded Root CAs that are used to verify the certificate received from the backend server. Thus, if the host attempts to impersonate a backend web server, it will be unable to provide a valid certificate corresponding to the accessed domain.
+
+Finally, the fourth issue is addressed by the usage of TLS with ESNI and by the usage of a TEE. All these technologies provide confidentiality and do not leak any information to any observer. 
+
+\subsection{Network Adversary}
+A Dolev-Yao network attacker can intercept and tamper communication between the client and the enclave, as well as between the enclave and the backend server. In practice, a network attacker does not have more capabilities than a malicious host, as the host can also monitor and modify traffic like the network adversary. Therefore, since the design has been demonstrated to protect against a malicious host, it will also protect against a network adversary.
+
+\subsection{Client-Side Security}
+
+\subsubsection{Same Origin Policy}
+It is assumed that neither clients nor the accessed websites are malicious, see Section \ref{sec:assumptions}. However, it is important to discuss the Same-Origin Policy (SOP).
+
+Same-Origin Policy (SOP) \cite{rfc6454} is a fundamental security concept used in web browsers to restrict how documents or scripts loaded from one origin can interact with resources from another origin. This policy is designed to prevent malicious websites from accessing sensitive data from another site without any permission, thereby protecting users from various attacks, such as cross-site scripting (XSS) or cross-site request forgery (CSRF).
+
+Thanks to the way URL rewriting is performed each website is translated into a unique subdomain, and thus perceived as distinct by the browser, allowing SOP to function correctly.
+
+\subsection{Certificate and Report Validation}
+To perform remote attestation successfully during the TLS handshake, the client requires two elements: the Root CA used for remote attestation (i.e., Intel SGX Root CA) and the identity of the enclave (i.e., MRENCLAVE).
+
+The Root CA of the trusted authority can be downloaded from a trusted website. In the case of Intel, the Root CA can be downloaded over HTTPS from their website \cite{intelSGXattesationservice}. 
+
+Regarding the enclave's identity, it can be obtained in one of two ways: via a trusted third party or by calculating it locally on a machine that supports the TEE technology used.
+
+\section{Deployability}
+\subsection{Enclave}
+Deploying the proposed enclave implementation is straightforward. It only requires hardware that supports Intel SGX, after which all necessary dependencies can be installed to run the enclave without any particular issues. Besides deploying the enclave, it is also necessary to purchase a domain and configure DNS records to point to the enclave's host.
+
+\subsection{Client}
+On the client side, ideally, the browser would support Remote Attestation (RA) over TLS and include the trusted authority (i.e. Intel SGX Root CA) and automatically perform the steps handled by the proposed browser extension. Additionally, the browser should provide a way to verify the identity of the enclave, either automatically or manually.
+
+Currently, browsers do not perform these tasks. However, it is still easy to navigate and use the enclave. The validity of the certificate and the identity of the enclave would need to be verified using additional tools, such as the proposed browser extension or manually.
+
+\section{Performance Evaluation}
+
+\subsection{Comparison with other Browsing Methods} \label{experiment-1}
+\subsubsection{Objective}
+The objective of this experiment is to compare the performance of browsing the internet using the proposed enclave-based system against normal browsing and browsing through a third-party web proxy tools.
+
+\subsubsection{Setup}
+\begin{itemize}
+    \item \textbf{Environment}: 
+    \begin{itemize}
+        \item \textbf{Client:} All the experiments are run from a Linux laptop. The laptop is connected to internet via a stable wireless connection and is connected to ETH network via VPN (required to access the enclave). The websites are all accessed via Firefox version 128.0b9.
+        \item \textbf{Enclave:} The enclave is running on the development machine described in Section \ref{sec:tools-and-technologies}. The enclave is reached from the client laptop via an SSH port forwarding. \\The enclave configuration is as follows:\\
+        \texttt{<EnclaveConfiguration>\\
+            <ProdID>0</ProdID>\\
+            <ISVSVN>0</ISVSVN>\\
+            <StackMaxSize>0x40000</StackMaxSize>\\
+            <HeapMaxSize>0x1000000</HeapMaxSize>\\
+            <TCSNum>100</TCSNum>\\
+            <TCSPolicy>1</TCSPolicy>\\
+            <DisableDebug>0</DisableDebug>\\
+        </EnclaveConfiguration>}
+        \item \textbf{Third-party web proxy tools:} The following two web proxies were selected as among the best performing. \texttt{proxysite.com} accordingly to \cite{similar-web} is the most used web proxy, but it performs badly compared to the following two.
+        \begin{itemize}
+            \item \texttt{genmirror.com}
+            \item \texttt{de.hideproxy.me} 
+        \end{itemize}
+    \end{itemize}
+    \item \textbf{Target Websites}: The experiment was conducted on two distinct websites to evaluate performance under different conditions:
+    \begin{itemize}
+        \item \texttt{syssec.ethz.ch}: Selected as a representative example of a typical webpage with a structured layout, including a header, body, and footer. It includes some CSS and JavaScript, though it does not depend on JavaScript for asynchronous content loading. The website also contains a large image file of 1.6 MB, contributing to an overall transferred size of slightly more than 3 MB.
+        \item \texttt{example.com}: Chosen for its simplicity, serving as an example of a minimalistic website. It is a small, purely HTML-based site that does not load any additional resources beyond the main HTML file. The total transferred size is 1.04 KB.
+    \end{itemize}
+    \item \textbf{Metrics}: The following metrics are measured for each browsing method:
+    \begin{itemize}
+        \item \textbf{First Contentful Paint (FCP)\cite{w3-fcp}\cite{web-dev-fcp}}: FCP measures the time from when the user first navigated to the page to when any part of the page's content is rendered on the screen. 
+        \item \textbf{Largest Contentful Paint (LCP)\cite{w3-lcp}\cite{web-dev-lcp}}: LCP reports the render time of the largest image, text block, or video visible in the viewport, relative to when the user first navigated to the page. Accordingly to \cite{w3-working-group} it is the best way to measure when the main content of a page has loaded.   
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Procedure}
+Each website is accessed with the following three methods:
+\begin{enumerate}
+    \item \textbf{Normal browsing}: The websites are accessed directly through Firefox.
+    \item \textbf{Third-party web proxy tool}: The websites are accessed via \\\texttt{genmirror.com} and \texttt{de.hideproxy.me} from Firefox.
+    \item \textbf{Enclave-based browsing}: The websites are accessed through the proposed enclave-based system from Firefox.
+\end{enumerate}
+For each condition, the above metrics are recorded via the Firefox Profiler tool \cite{firefox-profiler}: the metrics can be found under the \texttt{Marker Chart} section. The experiment is repeated 10 times for each method to ensure consistent results. Every time all the cache is invalidated in order to assure a full page reload.
+
+\subsubsection{Results}
+The table \ref{experiment1-table} summarizes the performance metrics obtained from the experiment. Each metric is averaged over 10 runs, and the standard deviation is calculated to assess the consistency of the results.
+
+\begin{table}[h!] \label{experiment1-table}
+\begin{center}
+    \centering
+    \caption{Performance Metrics for Different Browsing Methods Across Two Websites}
+    \label{tab:performance_metrics}
+    \begin{tabular}{lcccc}
+        \toprule
+        \textbf{Website} & \textbf{Method} & \textbf{Metric} & \textbf{Mean (ms)} & \textbf{Std. Dev. (ms)} \\
+        \midrule
+        \multirow{8}{*}{\centering \texttt{example.com}} 
+            & \multirow{2}{*}{Normal Browsing} 
+            & FCP & 568,70 & 62,83 \\
+            & &  LCP & 574,50 & 62,86\\
+            \cmidrule{2-5}
+            & \multirow{2}{*}{\texttt{genmirror.com}} 
+            & FCP & 702,40 & 60,42 \\
+            & &  LCP & 710,40 & 60,71\\
+            \cmidrule{2-5}
+            & \multirow{2}{*}{\texttt{de.hideproxy.me}} 
+            & FCP & 825,70 & 305,18 \\
+            & &  LCP & 835,20 & 300,70\\
+            \cmidrule{2-5}
+            & \multirow{2}{*}{Enclave} 
+            & FCP & 856,00 & 71,15 \\
+            & &  LCP & 865,90 & 83,08\\
+        \midrule
+        \multirow{8}{*}{\centering \texttt{syssec.ethz.ch}} 
+            & \multirow{2}{*}{Normal Browsing} 
+            & FCP & 2370,80 & 540,98 \\
+            & &  LCP & 2469,20 & 629,27\\
+            \cmidrule{2-5}
+            & \multirow{2}{*}{\texttt{genmirror.com}} 
+            & FCP & 1078,10 & 346,63 \\
+            & &  LCP & 1351,70 & 222,32\\
+            \cmidrule{2-5}
+            & \multirow{2}{*}{\texttt{de.hideproxy.me}} 
+            & FCP & 1599,70 & 1358,73 \\
+            & &  LCP & 2165,80 & 1712,12\\
+            \cmidrule{2-5}
+            & \multirow{2}{*}{Enclave} 
+            & FCP & 7958,20 & 2052,89 \\
+            & &  LCP & 10662,80 & 2393,69\\
+        \bottomrule
+        
+    \end{tabular}
+\end{center}
+\end{table}
+
+% \begin{figure}[h!] \label{experiment1-graph1}
+%     \centering
+%     \begin{tikzpicture}
+%         \begin{axis}[
+%             ybar,
+%             symbolic x coords={Normal, Genmirror, HideProxy, Enclave},
+%             xtick=data,
+%             bar width=20pt,
+%             ylabel={Time (ms)},
+%             nodes near coords,
+%             ymin=0,
+%             legend style={at={(0.5,-0.15)}, anchor=north, legend columns=-1},
+%             error bars/.cd, y dir=normal, y explicit,
+%             enlarge x limits=0.3,
+%             width=0.8\textwidth,
+%         ]
+%         \addplot+[
+%             error bars/.cd,
+%             y dir=both, y explicit,
+%         ] coordinates {
+%             (Normal, 150) +- (0,10)
+%             (Genmirror, 180) +- (0,12)
+%             (HideProxy, 170) +- (0,11)
+%             (Enclave, 160) +- (0,11)
+%         };
+%         \addplot+[
+%             error bars/.cd,
+%             y dir=both, y explicit,
+%         ] coordinates {
+%             (Normal, 350) +- (0,15)
+%             (Genmirror, 400) +- (0,20)
+%             (HideProxy, 380) +- (0,18)
+%             (Enclave, 370) +- (0,17)
+%         };
+%         \legend{First Content Time, Page Load Time}
+%         \end{axis}
+%     \end{tikzpicture}
+%     \caption{Comparison of Performance Metrics across Different Browsing Methods for \texttt{www.ethz.ch}}
+%     \label{fig:performance_comparison}
+% \end{figure}
+\clearpage
+\subsubsection{Observations}
+\begin{itemize}
+    \item \textbf{FCP \& LCP}:
+    \begin{itemize}
+        \item \texttt{example.com}: The results show that all web proxies introduce a minor overhead of a few hundred milliseconds compared to non-enclave browsing. Despite this slight delay, the enclave demonstrates consistent response times comparing the standard deviation to other browsing methods. From a user experience perspective, browsing via the enclave does not significantly impact perceived performance.
+        \item \texttt{syssec.ethz.ch}: For this website, there is a more noticeable disparity between enclave browsing and other methods. The load time difference—approximately 6 seconds for FCP and around 8 seconds for LCP—can likely be attributed to the enclave performing a TLS handshake for each resource fetched and to the delay introduced by the URL rewriting algorithm. Additionally, the enclave shows considerably higher instability, with a standard deviation of around 2 seconds for both metrics. It is also noteworthy that the two third-party web proxies outperform regular browsing. The reason for this probably comes from two factors: the fact that the third-party proxies do not load JavaScript resources and caching mechanisms employed by the proxies.
+    \end{itemize}
+    \item \textbf{Security Observations}: All resources loaded through the enclave and third-party web proxies are routed via the proxies themselves, with all URLs being correctly rewritten. A potential security concern is that the enclave allows users to fetch JavaScript resources, which could introduce risks. In contrast, the other two web proxies do not return any JavaScript, potentially reducing risk surface.
+    \item \textbf{Content and Usability Observations}: The absence of JavaScript in the content loaded via the third-party web proxies impacts the user experience on \texttt{syssec.ethz.ch}: for instance, the navigation bar's menu does not function properly, whereas it works as expected in the Enclave. Additionally, both \texttt{genmirror.com} and \texttt{de.hideproxy.me} exhibit rendering issues with \texttt{example.com}. The first proxy overlays its navigation bar on the website content and displays empty white boxes below, while the second proxy fails to display any content, despite the content being present in the HTML code. The only notable drawback of the Enclave is the absence of a navigation bar for browsing to other websites.
+\end{itemize}
+
+\clearpage
+\subsection{Load Testing of the Enclave Proxy} \label{experiment-2}
+\subsubsection{Objective}
+The objective of this experiment is to evaluate the scalability and performance of the enclave-based system under heavy load.
+
+\subsubsection{Setup}
+\begin{itemize}
+    \item \textbf{Client:} All the experiments are run from a Linux laptop. The laptop is connected to internet via a stable wireless connection and is connected to ETH network via VPN (required to access the enclave). The websites are all accessed via Firefox version 128.0b9.
+    \item \textbf{Enclave:} The enclave is running on the development machine described in Section \ref{sec:tools-and-technologies}. The enclave is reached from the client laptop via an SSH port forwarding. \\The enclave configuration is as follows:\\
+    \texttt{<EnclaveConfiguration>\\
+        <ProdID>0</ProdID>\\
+        <ISVSVN>0</ISVSVN>\\
+        <StackMaxSize>0x40000</StackMaxSize>\\
+        <HeapMaxSize>0x1000000</HeapMaxSize>\\
+        <TCSNum>100</TCSNum>\\
+        <TCSPolicy>1</TCSPolicy>\\
+        <DisableDebug>0</DisableDebug>\\
+    </EnclaveConfiguration>}
+    \item \textbf{Target Websites}: The experiment was conducted on two distinct websites to evaluate performance under different conditions:
+    \begin{itemize}
+        \item \texttt{syssec.ethz.ch}: Selected as representative of an average website. Its main HTML page size is 46.49 KB
+        \item \texttt{example.com}: Chosen as a minimalist website with a very small HTML page size of 1.04 KB.
+    \end{itemize}
+    \item \textbf{Load Generation}: A Python script is used to generate an increasingly large number of requests to the enclave-based service to fetch the main HTML page of the target website.
+    \item \textbf{Metrics}: The following metrics are recorded:
+    \begin{itemize}
+        \item \textbf{Response Time (ms)}: The time taken to respond to each request.
+        \item \textbf{Failed clients}: The number of clients whose request failed for any reason. The timeout was set to 10 seconds.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Procedure}
+The script generates a steadily increasing number of concurrent requests to the service (clients), starting from 5 increasing to 100 with an increment of 5. 100 is chosen as being the maximum amount of threads that can be spawned in the enclave (\texttt{TCSNum}). Metrics are recorded throughout the test.
+
+\subsubsection{Results and Observations}
+As shown in Table \ref{tab:experiment2-table}, the Enclave's average response time increases as the number of clients grows. Additionally, the standard deviation also rises with more clients, indicating that the Enclave's performance becomes less consistent across different clients.
+
+The number of clients whose requests cannot be fulfilled is correlated with the total number of clients. It is noticeable that when the maximum amount of threads that can be spawned is almost reached, many client's requests start to fail. 
+
+The difference in mean response times between \texttt{example.com} and \\\texttt{syssec.ethz.ch} is primarily due to the different page sizes and the additional overhead introduced by the URL rewriting algorithm.
+
+It is insightful to also compare the average time required to load \\\texttt{syssec.ethz.ch} between the two experiments. In experiment 1 (Table \ref{experiment1-table}), loading the full 3MB page took roughly 8 seconds on average. In contrast, in experiment 2 (Table \ref{tab:experiment2-table}), loading only the main HTML file of 46 KB took about 5 seconds. This discrepancy can be attributed to the current implementation of the Enclave, where no URL rewriting is applied to JavaScript or image resources. Therefore, since most of the resources loaded after the main HTML page are of these types and account for most of the full page size, the additional URL rewriting overhead is minimal compared to the size left to load.
+
+
+\begin{table}[h!]  \label{tab:experiment2-table}
+\centering
+\caption{Performance Evaluation of Web Proxy}
+\begin{tabular}{lcccc}
+\hline
+\textbf{Website}        & \textbf{Clients} & \textbf{Mean (ms)} & \textbf{Std. Dev. (ms)} & \textbf{Failed} \\ \hline
+\multirow{20}{*}{example.com} 
+    & 5  & 791.30  & 15.50  & 0 \\ \cline{2-5} 
+    & 10 & 854.74  & 25.70  & 0 \\ \cline{2-5} 
+    & 15 & 929.94  & 15.96  & 0 \\ \cline{2-5} 
+    & 20 & 992.51  & 77.49  & 0 \\ \cline{2-5} 
+    & 25 & 1080.67 & 71.10  & 0 \\ \cline{2-5} 
+    & 30 & 1149.33 & 59.64  & 0 \\ \cline{2-5} 
+    & 35 & 1341.14 & 85.00  & 0 \\ \cline{2-5} 
+    & 40 & 1408.64 & 46.34  & 1 \\ \cline{2-5} 
+    & 45 & 1427.35 & 71.15  & 0 \\ \cline{2-5} 
+    & 50 & 1546.80 & 52.87  & 1 \\ \cline{2-5} 
+    & 55 & 1683.13 & 169.36 & 1 \\ \cline{2-5} 
+    & 60 & 1817.31 & 70.88  & 5 \\ \cline{2-5} 
+    & 65 & 1825.99 & 127.16 & 2 \\ \cline{2-5} 
+    & 70 & 1883.74 & 86.34  & 2 \\ \cline{2-5} 
+    & 75 & 2005.99 & 133.88 & 1 \\ \cline{2-5} 
+    & 80 & 2171.65 & 154.28 & 1 \\ \cline{2-5} 
+    & 85 & 2362.93 & 129.42 & 3 \\ \cline{2-5} 
+    & 90 & 2517.20 & 166.87 & 8 \\ \cline{2-5} 
+    & 95 & 2200.05 & 235.89 & 13 \\ \cline{2-5} 
+    & 100 & 2276.80 & 152.29 & 23 \\ \hline
+\multirow{20}{*}{syssec.ethz.ch} 
+    & 5  & 5416.14  & 16.94  & 0 \\ \cline{2-5} 
+    & 10 & 5479.61  & 19.13  & 0 \\ \cline{2-5} 
+    & 15 & 5558.53  & 55.19  & 0 \\ \cline{2-5} 
+    & 20 & 5642.45  & 46.91  & 0 \\ \cline{2-5} 
+    & 25 & 5753.90  & 44.34  & 0 \\ \cline{2-5} 
+    & 30 & 5928.72  & 29.45  & 0 \\ \cline{2-5} 
+    & 35 & 6005.51  & 51.53  & 1 \\ \cline{2-5} 
+    & 40 & 6092.17  & 155.80 & 0 \\ \cline{2-5} 
+    & 45 & 6340.97  & 80.53  & 0 \\ \cline{2-5} 
+    & 50 & 6429.52  & 129.35 & 3 \\ \cline{2-5} 
+    & 55 & 6496.02  & 119.30 & 3 \\ \cline{2-5} 
+    & 60 & 6628.77  & 174.67 & 0 \\ \cline{2-5} 
+    & 65 & 6760.93  & 163.51 & 0 \\ \cline{2-5} 
+    & 70 & 6823.51  & 221.77 & 0 \\ \cline{2-5} 
+    & 75 & 6868.67  & 223.83 & 1 \\ \cline{2-5} 
+    & 80 & 7157.64  & 329.74 & 0 \\ \cline{2-5} 
+    & 85 & 7036.75  & 346.21 & 1 \\ \cline{2-5} 
+    & 90 & 7226.61  & 276.04 & 0 \\ \cline{2-5} 
+    & 95 & 7262.28  & 330.23 & 5 \\ \cline{2-5} 
+    & 100 & 7392.69  & 219.73 & 10 \\ \hline
+\end{tabular}
+\end{table}
+
+
+

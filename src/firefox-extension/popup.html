@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #333;
+            color: #f0f0f0;
+        }
+        h1 {
+            text-align: center;
+        }
+        table {
+            width: 100%;
+            color: #f0f0f0;
+            border-collapse: collapse;
+        }
+        th {
+            padding: 15px;
+            text-align: right;
+        }
+        td {
+            padding: 15px;
+            text-align: left;
+        }
+        button {
+            margin-left: 10px;
+        }
+        .selectable {
+            user-select: all;
+        }
+        #full-cert, #ias-report {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>RA-TLS Certificate Verifier</h1>
+    <table>
+        <tr>
+            <th>Validity:</th>
+            <td id="result"></td>
+        </tr>
+        <tr>
+            <th>MRSIGNER:</th>
+            <td id="mr-signer" class="selectable"></td>
+            <td><button id="mr-signer-button">Copy</button></td>
+        </tr>
+        <tr>
+            <th>MRENCLAVE:</th>
+            <td id="mr-enclave" class="selectable"></td>
+            <td><button id="mr-enclave-button">Copy</button></td>
+        </tr>
+        <tr>
+            <th>IAS Report:</th>
+            <td id="ias-report" class="selectable"></td>
+            <td><button id="ias-report-button">Copy</button></td>
+        </tr>
+        <tr>
+            <th>Full certificate:</th>
+            <td id="full-cert" class="selectable"></td>
+            <td><button id="full-cert-button">Copy</button></td>
+        </tr>
+    </table>
+    <script src="popup.js"></script>
+    
+</body>
+</html>
