@@ -32,4 +32,4 @@ Every directory contains a README file with more information about the contents,
 ## Demo
 The following video shows navigation to different websites using the web proxy service implemented in this project.
 
-![Video](https://gitlab.inf.ethz.ch/OU-SYSSEC/syssec-all/riccardo-negri-semester-project/-/blob/main/media/demo.mp4)
+[Demo Video](https://github.com/riccardo-negri/secure-and-private-web-proxy/blob/main/media/demo.mp4)
